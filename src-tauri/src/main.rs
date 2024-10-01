@@ -1,14 +1,21 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::api::dialog;
 use tauri::api::path::desktop_dir;
 use tauri::Manager;
-use chrono::{DateTime, TimeZone, Utc};
-use std::fs;
-use std::io;
-use std::time::{SystemTime, UNIX_EPOCH};
+
+enum TypeFormat {
+    YYYY,
+    YYYYMM,
+    YYYYMMDD,
+    DDMMYYYY,
+}
 
 // Structs
 #[derive(Debug, Serialize, Deserialize)]
@@ -35,8 +42,32 @@ impl ListItem {
 
 // Convert file creation time to YYYY.MM.DD format
 fn convert_sec_to_ymd(seconds: i64) -> String {
-    let naive_datetime: DateTime<Utc> = Utc.timestamp_opt(seconds, 0).single().expect("Invalid timestamp");
+    let naive_datetime: DateTime<Utc> = Utc
+        .timestamp_opt(seconds, 0)
+        .single()
+        .expect("Invalid timestamp");
     naive_datetime.format("%Y.%m.%d").to_string()
+}
+fn convert_sec_to_ym(seconds: i64) -> String {
+    let naive_datetime: DateTime<Utc> = Utc
+        .timestamp_opt(seconds, 0)
+        .single()
+        .expect("Invalid timestamp");
+    naive_datetime.format("%Y.%m").to_string()
+}
+fn convert_sec_to_y(seconds: i64) -> String {
+    let naive_datetime: DateTime<Utc> = Utc
+        .timestamp_opt(seconds, 0)
+        .single()
+        .expect("Invalid timestamp");
+    naive_datetime.format("%Y").to_string()
+}
+fn convert_sec_to_dmy(seconds: i64) -> String {
+    let naive_datetime: DateTime<Utc> = Utc
+        .timestamp_opt(seconds, 0)
+        .single()
+        .expect("Invalid timestamp");
+    naive_datetime.format("%d.%m.%Y").to_string()
 }
 
 // Create directory if it doesn't exist
@@ -91,7 +122,10 @@ fn list_files_in_folder(folder_path: &str) -> Result<Vec<ListItem>, String> {
                 let list_item = ListItem::new(creation_time, entry.path().display().to_string());
                 file_list.push(list_item);
             } else {
-                println!("Creation time not available for file: {}", entry.path().display());
+                println!(
+                    "Creation time not available for file: {}",
+                    entry.path().display()
+                );
             }
         }
     }
@@ -99,20 +133,30 @@ fn list_files_in_folder(folder_path: &str) -> Result<Vec<ListItem>, String> {
     Ok(file_list) // Return the list of files
 }
 
-
 // Handle the file sorting based on creation date
 #[tauri::command]
-fn file_handler(file_list: Vec<ListItem>, parent_folder_path: String) {
+fn file_handler(file_list: Vec<ListItem>, parent_folder_path: String, type_format: String) {
     for file in file_list {
         if check_extension(&file.file_path) {
-            let folder_name: String = convert_sec_to_ymd(file.metadata);
+            // let folder_name: String = convert_sec_to_ymd(file.metadata);
+            let folder_name: String = match type_format.as_str() {
+                "YYYY.MM.DD" => convert_sec_to_ymd(file.metadata),
+                "YYYY.MM" => convert_sec_to_ym(file.metadata),
+                "YYYY" => convert_sec_to_y(file.metadata),
+                "DD.MM.YYYY" => convert_sec_to_dmy(file.metadata),
+                _ => convert_sec_to_ymd(file.metadata),
+            };
             let child_folder_path = format!("{}/{}", parent_folder_path, folder_name);
             if let Err(e) = create_dir_if_not_exists(&child_folder_path) {
                 println!("Error creating directory: {}", e);
                 continue;
             }
             let source = &file.file_path;
-            let destination = &format!("{}/{}", child_folder_path, source.split("/").last().unwrap());
+            let destination = &format!(
+                "{}/{}",
+                child_folder_path,
+                source.split("/").last().unwrap()
+            );
             if let Err(e) = move_file(source, destination) {
                 println!("Error moving file: {}", e);
             }
@@ -125,7 +169,8 @@ fn file_handler(file_list: Vec<ListItem>, parent_folder_path: String) {
 async fn open_file_system() -> Option<String> {
     let (sender, receiver) = std::sync::mpsc::channel();
 
-    let desktop_path = tauri::api::path::desktop_dir().unwrap_or_else(|| std::env::current_dir().unwrap());
+    let desktop_path =
+        tauri::api::path::desktop_dir().unwrap_or_else(|| std::env::current_dir().unwrap());
     dialog::FileDialogBuilder::new()
         .set_title("Select a Folder")
         .set_directory(desktop_path)
@@ -150,4 +195,3 @@ fn main() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-

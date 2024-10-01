@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/tauri'
-import { PathDisplayComponent } from '@/components/path-display'
+import { PathDisplayComponent } from '@/components/ui/path-display'
 import { useAtom } from 'jotai'
 import { pathAtom, pathErrorAtom } from '@/store/pathStore'
 

@@ -1,14 +1,23 @@
 import { LayersIcon } from '@radix-ui/react-icons'
-import { FolderSelector } from '@/components/folder-selector'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
+import { FolderSelector } from '@/components/ui/folder-selector'
 import { useAtom } from 'jotai'
 import { pathAtom } from '@/store/pathStore'
 import { invoke } from '@tauri-apps/api/tauri'
 import './App.css'
-import { useEffect, useState } from 'react'
+import { ReactEventHandler, useEffect, useState } from 'react'
+import { TypeFormat } from '@/types/formatTypes'
 
 function App() {
     const [path, setPath] = useAtom(pathAtom)
     const [isSuccesed, setIsSuccesed] = useState(false)
+    const [formatType, setFormatType] = useState<string | null>(null)
 
     const startSorting = async (path: string) => {
         invoke('list_files_in_folder', { folderPath: path })
@@ -16,6 +25,7 @@ function App() {
                 invoke('file_handler', {
                     fileList: response,
                     parentFolderPath: path,
+                    typeFormat: formatType || '',
                 })
                     .then(() => {
                         setIsSuccesed(true)
@@ -31,6 +41,10 @@ function App() {
     }
 
     useEffect(() => {
+        console.log(`formatType: ${formatType}`)
+    }, [formatType])
+
+    useEffect(() => {
         if (isSuccesed) {
             setTimeout(() => {
                 setIsSuccesed(false)
@@ -38,6 +52,10 @@ function App() {
             }, 5000)
         }
     }, [isSuccesed])
+
+    const handleValueChange = (newValue: string) => {
+        setFormatType(newValue)
+    }
 
     return (
         <div className='container flex items-center justify-center m-0 p-0'>
@@ -63,6 +81,47 @@ function App() {
                 <FolderSelector />
             </div>
             {path && (
+                <div className='my-5'>
+                    <Select
+                        value={formatType ?? undefined}
+                        onValueChange={handleValueChange}
+                    >
+                        <SelectTrigger className='w-[180px] text-green-500 border-green-500 bg-amber-300'>
+                            <SelectValue
+                                className='text-green-500 hover:text-green-700'
+                                placeholder='Type of sorting'
+                            />
+                        </SelectTrigger>
+                        <SelectContent className='border-green-500 bg-amber-300 text-green-500 hover:!text-green-700'>
+                            <SelectItem
+                                className='!text-green-500  hover:!text-green-700  active:!text-green-700 !bg-amber-300 hover:!bg-amber-300'
+                                value={TypeFormat.YYYYMMDD}
+                            >
+                                Year.Month.Day
+                            </SelectItem>
+                            <SelectItem
+                                className='!text-green-500 hover:!text-green-700  active:!text-green-700 !bg-amber-300 hover:!bg-amber-300'
+                                value={TypeFormat.YYYYMM}
+                            >
+                                Year.Month
+                            </SelectItem>
+                            <SelectItem
+                                className='!text-green-500 hover:!text-green-700  active:!text-green-700 !bg-amber-300 hover:!bg-amber-300'
+                                value={TypeFormat.YYYY}
+                            >
+                                Year
+                            </SelectItem>
+                            <SelectItem
+                                className='!text-green-500 hover:!text-green-700 active:!text-green-700 !bg-amber-300 hover:!bg-amber-300 active:!bg-amber-300'
+                                value={TypeFormat.DDMMYYYY}
+                            >
+                                Day.Month.Year
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
+            {path && formatType && (
                 <div className='flex justify-between justify-between'>
                     <button
                         onClick={() => {
